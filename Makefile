@@ -47,13 +47,6 @@ define PATCH_MIPS_FLAGS
 	fi
 endef
 
-# Patch creack/pty for loong64 support (upstream doesn't have ztypes_loong64.go)
-PTY_PATCH_LOONG64=pty_dir=$$(go env GOMODCACHE)/github.com/creack/pty@v1.1.9; \
-	if [ -d "$$pty_dir" ] && [ ! -f "$$pty_dir/ztypes_loong64.go" ]; then \
-		chmod +w "$$pty_dir" 2>/dev/null || true; \
-		printf '//go:build linux && loong64\npackage pty\ntype (_C_int int32; _C_uint uint32)\n' > "$$pty_dir/ztypes_loong64.go"; \
-	fi
-
 # Golangci-lint
 GOLANGCI_LINT?=golangci-lint
 
@@ -138,14 +131,6 @@ build-launcher:
 	@ln -sf picoclaw-launcher-$(PLATFORM)-$(ARCH) $(BUILD_DIR)/picoclaw-launcher
 	@echo "Build complete: $(BUILD_DIR)/picoclaw-launcher"
 
-## build-launcher-tui: Build the picoclaw-launcher TUI binary
-build-launcher-tui:
-	@echo "Building picoclaw-launcher-tui for $(PLATFORM)/$(ARCH)..."
-	@mkdir -p $(BUILD_DIR)
-	@$(GO) build $(GOFLAGS) -o $(BUILD_DIR)/picoclaw-launcher-tui-$(PLATFORM)-$(ARCH) ./cmd/picoclaw-launcher-tui
-	@ln -sf picoclaw-launcher-tui-$(PLATFORM)-$(ARCH) $(BUILD_DIR)/picoclaw-launcher-tui
-	@echo "Build complete: $(BUILD_DIR)/picoclaw-launcher-tui"
-
 ## build-whatsapp-native: Build with WhatsApp native (whatsmeow) support; larger binary
 build-whatsapp-native: generate
 ## @echo "Building $(BINARY_NAME) with WhatsApp native for $(PLATFORM)/$(ARCH)..."
@@ -190,6 +175,12 @@ build-linux-mipsle: generate
 build-pi-zero: build-linux-arm build-linux-arm64
 	@echo "Pi Zero 2 W builds: $(BUILD_DIR)/$(BINARY_NAME)-linux-arm (32-bit), $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 (64-bit)"
 
+build-windows: generate
+	@echo "Building for windows platform..."
+	@mkdir -p $(BUILD_DIR)
+	GOOS=windows GOARCH=amd64 $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe ./$(CMD_DIR)
+	@echo "Windows build complete"
+
 ## build-all: Build picoclaw for all platforms
 build-all: generate
 	@echo "Building for multiple platforms..."
@@ -197,7 +188,6 @@ build-all: generate
 	GOOS=linux GOARCH=amd64 $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./$(CMD_DIR)
 	GOOS=linux GOARCH=arm GOARM=7 $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm ./$(CMD_DIR)
 	GOOS=linux GOARCH=arm64 $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 ./$(CMD_DIR)
-	@$(PTY_PATCH_LOONG64)
 	GOOS=linux GOARCH=loong64 $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-loong64 ./$(CMD_DIR)
 	GOOS=linux GOARCH=riscv64 $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-riscv64 ./$(CMD_DIR)
 	GOOS=linux GOARCH=mipsle GOMIPS=softfloat $(GO) build $(GOFLAGS_NO_GOOLM) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-mipsle ./$(CMD_DIR)
@@ -258,11 +248,11 @@ fmt:
 
 ## lint: Run linters
 lint:
-	@$(GOLANGCI_LINT) run --build-tags $(GO_BUILD_TAGS)
+	@CGO_ENABLED=0 $(GOLANGCI_LINT) run --build-tags $(GO_BUILD_TAGS)
 
 ## fix: Fix linting issues
 fix:
-	@$(GOLANGCI_LINT) run --fix --build-tags $(GO_BUILD_TAGS)
+	@CGO_ENABLED=0 $(GOLANGCI_LINT) run --fix --build-tags $(GO_BUILD_TAGS)
 
 ## deps: Download dependencies
 deps:
